@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any
 from supabase import Client
 import httpx
@@ -68,11 +69,11 @@ async def run_webhook_ligacao_workflow(
 
         tracker.finish_step_success(step1_id, {"status": "ingested", "call_id": call_id})
 
-        # Step 2: Route Decision (Call_predict vs AI Agent)
+        # Step 2: Route Decision following n8n Workflow Logic
         call_predict_enabled = bool(
             client_config.get("call_predict_enabled") or client_config.get("Call_predict")
         )
-        step2_id = tracker.start_step("route_decision", input_data={"call_predict_enabled": call_predict_enabled, "event": event_type})
+        step2_id = tracker.start_step("route_decision", input_data={"call_predict_enabled": call_predict_enabled, "event": event_type, "disconnection_reason": disconnection_reason})
 
         routed_action = None
 
@@ -80,7 +81,6 @@ async def run_webhook_ligacao_workflow(
             routed_action = "call_predict_microservice"
             tracker.finish_step_success(step2_id, {"routed_to": routed_action})
             
-            # Envia diretamente ao microsserviço call_predict via API
             call_predict_url = client_config.get("call_predict_url") or "http://call-predict:8000/webhook/predict"
             try:
                 async with httpx.AsyncClient() as http_client:
@@ -91,7 +91,68 @@ async def run_webhook_ligacao_workflow(
 
             tracker.finish_execution_success({"status": "completed", "route": routed_action, "call_predict_result": cp_result})
             return {"status": "completed", "execution_id": execution_id, "route": routed_action}
+
+        # n8n Node: Evento (Switch: call_ended vs call_analyzed)
+        if event_type == "call_ended":
+            # n8n Node: Tipo de erro (dial_failed, dial_busy, inactivity, etc.)
+            # Check attempts in the same hour (< 3 attempts?)
+            now_hour_str = datetime.now(timezone.utc).strftime("%d/%m/%Y %H")
+            
+            attempts_res = tenant_db.table("Retell_calls_Mindflow") \
+                .select("id", count="exact") \
+                .eq("to_number", to_number) \
+                .gte("created_at", (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()) \
+                .execute()
+
+            attempts_count = attempts_res.count or 0
+
+            if attempts_count < 3:
+                # Retentativa (Wait 5 min or default delay)
+                routed_action = "post_call_retentativa"
+                tracker.finish_step_success(step2_id, {"routed_to": routed_action, "reason": "call_ended_retrial", "attempts_count": attempts_count})
+                
+                retry_payload = {**payload, "delay_minutes": 5}
+                retentativa_res = await run_retentativa_workflow(tenant_db, client_config, retry_payload, execution_id)
+                
+                tracker.finish_execution_success({"status": "completed", "route": routed_action, "result": retentativa_res})
+                return {"status": "completed", "execution_id": execution_id, "route": routed_action}
+            else:
+                routed_action = "max_attempts_reached"
+                tracker.finish_step_success(step2_id, {"routed_to": routed_action, "attempts_count": attempts_count})
+                tracker.finish_execution_success({"status": "completed", "route": routed_action})
+                return {"status": "completed", "execution_id": execution_id, "route": routed_action}
+
+        elif event_type == "call_analyzed":
+            # n8n Node: If (voicemail_reached)
+            is_voicemail = (disconnection_reason == "voicemail_reached") or bool(call_obj.get("call_analysis", {}).get("in_voicemail"))
+            
+            if is_voicemail:
+                routed_action = "post_call_retentativa"
+                tracker.finish_step_success(step2_id, {"routed_to": routed_action, "reason": "voicemail_reached"})
+                retry_payload = {**payload, "delay_minutes": 5}
+                retentativa_res = await run_retentativa_workflow(tenant_db, client_config, retry_payload, execution_id)
+                tracker.finish_execution_success({"status": "completed", "route": routed_action, "result": retentativa_res})
+                return {"status": "completed", "execution_id": execution_id, "route": routed_action}
+
+            # n8n Node: If1 (transcript exists)
+            has_transcript = bool(transcript and len(transcript.strip()) > 0)
+            if has_transcript:
+                routed_action = "post_call_analysis_ai"
+                tracker.finish_step_success(step2_id, {"routed_to": routed_action})
+                analysis_res = await run_call_analysis_workflow(tenant_db, client_config, payload, execution_id)
+                tracker.finish_execution_success({"status": "completed", "route": routed_action, "result": analysis_res})
+                return {"status": "completed", "execution_id": execution_id, "route": routed_action}
+            else:
+                # No transcript -> Route to retentativa
+                routed_action = "post_call_retentativa"
+                tracker.finish_step_success(step2_id, {"routed_to": routed_action, "reason": "no_transcript"})
+                retry_payload = {**payload, "delay_minutes": 5}
+                retentativa_res = await run_retentativa_workflow(tenant_db, client_config, retry_payload, execution_id)
+                tracker.finish_execution_success({"status": "completed", "route": routed_action, "result": retentativa_res})
+                return {"status": "completed", "execution_id": execution_id, "route": routed_action}
+
         else:
+            # Fallback for other events
             routed_action = "post_call_analysis_ai"
             tracker.finish_step_success(step2_id, {"routed_to": routed_action})
             analysis_res = await run_call_analysis_workflow(tenant_db, client_config, payload, execution_id)
