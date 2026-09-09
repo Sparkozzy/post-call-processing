@@ -100,7 +100,7 @@ async def run_call_analysis_workflow(
 Analise a transcrição abaixo e os exemplos históricos RAG para decidir se deve ligar novamente ("Ligar?") e em quantos minutos ("min").
 
 Retorne APENAS um JSON válido sem markdown no formato:
-{
+{{
   "pense": "explicação curta da decisão",
   "Ligar?": true ou false,
   "min": número em minutos (0 se Ligar? = false),
@@ -109,7 +109,7 @@ Retorne APENAS um JSON válido sem markdown no formato:
   "causa_raiz": "Humano | Caixa Postal | URA | Queda | Falha",
   "nivel_interesse": "Quente | Morno | Frio | Nulo",
   "drop_state": "Abertura | Discovery | Pitch | Close | Nulo"
-}
+}}
 
 Exemplos RAG:
 {rag_examples}
