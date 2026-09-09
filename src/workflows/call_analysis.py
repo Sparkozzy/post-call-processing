@@ -180,6 +180,7 @@ Transcrição da ligação:
             routing_result = "dispatched_to_pre_call_api"
             pre_call_url = client_config.get("pre_call_processing_url") or "https://call-github.bkpxmb.easypanel.host/webhook"
             
+            prompt_id_val = str(client_config.get("prompt_id") or "1")
             pre_call_payload = {
                 "workflow_name": "pre_call_processing",
                 "execution_id": f"ai_decision_{call_id}",
@@ -187,6 +188,7 @@ Transcrição da ligação:
                 "nome": customer_name,
                 "email": customer_email,
                 "agent_id": call_obj.get("agent_id"),
+                "Prompt_id": prompt_id_val,
                 "contexto": agent_decision.get("context") or "Nova chamada solicitada por decisão do agente de IA."
             }
 
