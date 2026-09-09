@@ -168,33 +168,49 @@ Transcrição da ligação:
             .execute()
         tracker.finish_step_success(step4_id, {"status": "updated"})
 
-        # Step 5: Decision Routing
+        # Step 5: Direct Dispatch to pre_call_processing API
         step5_id = tracker.start_step("decision_routing", input_data={"Ligar?": agent_decision.get("Ligar?"), "min": agent_decision.get("min")})
         
         should_call = bool(agent_decision.get("Ligar?"))
         delay_minutes = int(agent_decision.get("min") or 0)
-        call_predict_enabled = bool(client_config.get("call_predict_enabled") or client_config.get("Call_predict"))
-
+        
         routing_result = None
 
         if should_call:
-            if call_predict_enabled and calls_last_hour < 5:
-                routing_result = "forwarded_to_call_predict"
-                call_predict_url = client_config.get("call_predict_url") or "http://call-predict:8000/webhook/predict"
-                try:
-                    async with httpx.AsyncClient() as http_client:
-                        await http_client.post(call_predict_url, json=payload, timeout=15.0)
-                except Exception:
-                    pass
-            else:
-                routing_result = "forwarded_to_retentativa"
-                retry_payload = {**payload, "delay_minutes": delay_minutes, "agent_decision": agent_decision}
-                await run_retentativa_workflow(tenant_db, client_config, retry_payload, tracker.execution_id)
+            routing_result = "dispatched_to_pre_call_api"
+            pre_call_url = client_config.get("pre_call_processing_url") or "https://call-github.bkpxmb.easypanel.host/webhook"
+            
+            pre_call_payload = {
+                "workflow_name": "pre_call_processing",
+                "execution_id": f"ai_decision_{call_id}",
+                "numero": to_number,
+                "nome": customer_name,
+                "email": customer_email,
+                "agent_id": call_obj.get("agent_id"),
+                "contexto": agent_decision.get("context") or "Nova chamada solicitada por decisão do agente de IA."
+            }
+
+            try:
+                async with httpx.AsyncClient() as http_client:
+                    resp = await http_client.post(
+                        pre_call_url,
+                        json=pre_call_payload,
+                        headers={
+                            "Content-Type": "application/json",
+                            "X-API-Key": "mf_sk_2026_pre_call_xK9v3Qm7bR4wT1nZ"
+                        },
+                        timeout=15.0
+                    )
+                    dispatch_status = resp.json() if resp.status_code in (200, 201, 202) else {"error": resp.text, "status_code": resp.status_code}
+            except Exception as dispatch_err:
+                dispatch_status = {"error": str(dispatch_err)}
+
         else:
             routing_result = "finished_no_retrial"
+            dispatch_status = None
 
-        tracker.finish_step_success(step5_id, {"routing_result": routing_result})
-        output_res = {"status": "completed", "agent_decision": agent_decision, "routing_result": routing_result}
+        tracker.finish_step_success(step5_id, {"routing_result": routing_result, "dispatch_status": dispatch_status})
+        output_res = {"status": "completed", "agent_decision": agent_decision, "routing_result": routing_result, "dispatch_status": dispatch_status}
         tracker.finish_execution_success(output_res)
         return output_res
 
