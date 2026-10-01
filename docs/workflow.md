@@ -63,7 +63,7 @@ Este é o fluxo principal de inteligência pós-chamada. Um **Agente de IA Autô
 5. **`post_call_analysis_decision_routing`**:
    - Se `Ligar? == true`:
      - Se `Call_predict == True` E o limite de ligações na última hora não foi excedido: encaminha diretamente para o microsserviço `call_predict`.
-     - Caso contrário: encaminha para o workflow `post_call_retentativa` agendando os `min` minutos informados pelo Agente (respeitando a janela comercial 09:00 - 18:00, Seg-Sex).
+      - Caso contrário: encaminha para o workflow `post_call_retentativa` agendando os `min` minutos informados pelo Agente (respeitando a janela comercial 09:00 - 21:00, Seg-Sex).
    - Se `Ligar? == false` (ex.: número errado, reunião agendada, objeção definitiva), encerra o ciclo de retentativas para o lead (`min = 0`).
 
 ---
@@ -76,7 +76,7 @@ Este é o fluxo principal de inteligência pós-chamada. Um **Agente de IA Autô
 1. **`post_call_retentativa_init_edw`**: Insere o registro mestre de execução (`workflow_name = 'post_call_retentativa'`).
 2. **`post_call_retentativa_check_scheduled`**: Consulta exclusivamente a tabela `agendamentos` (Supabase do cliente). Se o lead já tiver reunião marcada (`status == 'agendado'`) ou `Ligar? == false`, aborta o disparo da retentativa com status `SUCCESS` e resultado `aborted_meeting_scheduled`.
 3. **`post_call_retentativa_check_hourly_limit`**: Verifica se o limite de ligações na última hora para aquele número foi atingido. Se sim, aguarda a liberação da janela de taxa antes de agendar.
-4. **`post_call_retentativa_wait`**: Aguarda os `min` minutos decididos pelo Agente de IA (ou o tempo do `call_predict`), ajustados para a janela comercial válida (09:00–18:00, Seg–Sex).
+4. **`post_call_retentativa_wait`**: Aguarda os `min` minutos decididos pelo Agente de IA (ou o tempo do `call_predict`), ajustados para a janela comercial válida (09:00–21:00, Seg–Sex).
 5. **`post_call_retentativa_build_payload`**: Formata o payload de requisição para a API do microsserviço de disparo `pre_call_processing` (`client_id`, `numero`, `nome`, `email`, `prompt`, `contexto`).
 6. **`post_call_retentativa_dispatch_pre_call`**:
    - Efetua a chamada POST HTTP para a API interna do microsserviço **`pre_call_processing`**.

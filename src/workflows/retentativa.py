@@ -85,7 +85,7 @@ async def run_retentativa_workflow(
         now_brt = datetime.now(ZoneInfo("America/Sao_Paulo"))
 
         start_str = str(client_config.get("business_hours_start") or "09:00:00")
-        end_str = str(client_config.get("business_hours_end") or "18:00:00")
+        end_str = str(client_config.get("business_hours_end") or "21:00:00")
 
         start_hour = int(start_str.split(":")[0])
         end_hour = int(end_str.split(":")[0])
