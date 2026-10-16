@@ -53,7 +53,8 @@ async def run_webhook_ligacao_workflow(
             "status": call_status,
             "Nome": nome,
             "Email": email,
-            "data": payload.get("timestamp") or str(call_obj.get("start_timestamp", ""))
+            "data": payload.get("timestamp") or str(call_obj.get("start_timestamp", "")),
+            "Duracao": str(call_obj.get("duration_ms", "")) if call_obj.get("duration_ms") is not None else None
         }
 
         # Check if call_id exists to update or insert

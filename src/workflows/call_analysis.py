@@ -157,8 +157,8 @@ Transcrição da ligação:
             "call_summary": agent_decision.get("context"),
             "LLM_token_usage": str(call_obj.get("llm_token_usage", "")),
         }
-        if call_obj.get("duration_ms"):
-            update_data["Duracao"] = str(call_obj.get("duration_ms") / 1000.0)
+        if call_obj.get("duration_ms") is not None:
+            update_data["Duracao"] = str(call_obj.get("duration_ms"))
         if call_obj.get("combined_cost"):
             update_data["combined_cost"] = str(call_obj.get("combined_cost"))
 
