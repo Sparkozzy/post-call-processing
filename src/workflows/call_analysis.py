@@ -99,6 +99,15 @@ async def run_call_analysis_workflow(
 ==<role>Estrategista de Conversão MindFlow. Analise a intencionalidade comercial desta ligação com precisão.</role>
 Analise a transcrição abaixo e os exemplos históricos RAG para decidir se deve ligar novamente ("Ligar?") e em quantos minutos ("min").
 
+REGRAS CRÍTICAS DE DECISÃO:
+1. OPT-OUT / DESINTERESSE / CANCELAMENTO:
+   Se o lead pedir expressamente para cancelar, tirar da lista, não ligar mais, parar de ligar, demonstrar irritação com ligações repetidas, ou se for engano/número errado:
+   -> Você DEVE definir OBRIGATORIAMENTE "Ligar?": false e "min": 0.
+   -> Jamais agende nova ligação ou tente reengajar quem pediu para sair da lista.
+
+2. INTERVALO DE RETENTATIVA ("min"):
+   Se o lead demonstrar interesse ou pedir para retornar em outro momento/dia, defina "Ligar?": true e "min" como o tempo adequado em minutos (ex: 60 para 1 hora, 120 para 2 horas, 1440 para o dia seguinte). Nunca defina min=0 quando Ligar?=true.
+
 Retorne APENAS um JSON válido sem markdown no formato:
 {{
   "pense": "explicação curta da decisão",
@@ -181,6 +190,15 @@ Transcrição da ligação:
             pre_call_url = client_config.get("pre_call_processing_url") or "https://call-github.bkpxmb.easypanel.host/webhook"
             
             prompt_id_val = str(client_config.get("prompt_id") or "1")
+            
+            # Se a IA definiu um delay em minutos, agenda para o futuro no fuso de Brasília
+            quando_ligar_iso = None
+            if delay_minutes > 0:
+                # Fuso horário de Brasília (UTC-3)
+                br_tz = timezone(timedelta(hours=-3))
+                data_futura = datetime.now(br_tz) + timedelta(minutes=delay_minutes)
+                quando_ligar_iso = data_futura.isoformat()
+
             pre_call_payload = {
                 "workflow_name": "pre_call_processing",
                 "execution_id": f"ai_decision_{call_id}",
@@ -189,6 +207,7 @@ Transcrição da ligação:
                 "email": customer_email,
                 "agent_id": call_obj.get("agent_id"),
                 "Prompt_id": prompt_id_val,
+                "quando_ligar": quando_ligar_iso,
                 "contexto": agent_decision.get("context") or "Nova chamada solicitada por decisão do agente de IA."
             }
 
