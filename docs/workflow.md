@@ -51,7 +51,7 @@ Este é o fluxo principal de inteligência pós-chamada. Um **Agente de IA Autô
    - Busca exemplos de poucas demonstrações (few-shot RAG) no Supabase Vector Store (`documents_fil` via `OpenAIEmbeddings`) com base na transcrição atual.
    - ⚠️ **REGRA OBRIGATÓRIA DE RAG:** A consulta de RAG na tabela `documents_fil` DEVE ser realizada SEMPRE no **Supabase Master (projeto principal "Ryan")**, utilizando a chave de conexão master, e NUNCA no banco isolado do cliente.
 4. **`post_call_analysis_agent_evaluation`**:
-   - **Agente de Decisão por IA:** Executa o modelo LLM (`gpt-4.1-nano` / LangChain LLM Chain) utilizando o prompt mestre e os exemplos obtidos via RAG para decidir autônoma e fundamentadamente:
+   - **Agente de Decisão por IA:** Executa o modelo LLM (`gpt-4o-mini` / LangChain LLM Chain) utilizando o prompt mestre e os exemplos obtidos via RAG para decidir autônoma e fundamentadamente:
      - **`Ligar?`** (`boolean`): Se deve realizar nova tentativa de ligação.
      - **`min`** (`number`): Quando (em quantos minutos) a próxima tentativa deve ocorrer.
      - `causa_raiz` (`Humano`, `Caixa Postal`, `URA`, `Queda`, `Falha`)

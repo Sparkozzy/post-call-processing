@@ -131,7 +131,8 @@ Transcrição da ligação:
             input_variables=["rag_examples", "transcript"]
         )
         
-        llm = ChatOpenAI(model="gpt-4.1-nano", temperature=0.2)
+        model_name = client_config.get("fallback_llm_model") or "gpt-4o-mini"
+        llm = ChatOpenAI(model=model_name, temperature=0.2)
         chain = prompt | llm
         
         llm_response = await chain.ainvoke({
