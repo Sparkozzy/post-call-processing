@@ -192,12 +192,28 @@ Transcrição da ligação:
             
             prompt_id_val = str(client_config.get("prompt_id") or "1")
             
-            # Se a IA definiu um delay em minutos, agenda para o futuro no fuso de Brasília
+            # Trava 1: Blindagem Estrita de Horário Comercial (BRT)
+            br_tz = timezone(timedelta(hours=-3))
+            now_brt = datetime.now(br_tz)
+            start_str = str(client_config.get("business_hours_start") or "08:00")
+            end_str = str(client_config.get("business_hours_end") or "20:00")
+            start_hour = int(start_str.split(":")[0])
+            end_hour = int(end_str.split(":")[0])
+
             quando_ligar_iso = None
             if delay_minutes > 0:
-                # Fuso horário de Brasília (UTC-3)
-                br_tz = timezone(timedelta(hours=-3))
-                data_futura = datetime.now(br_tz) + timedelta(minutes=delay_minutes)
+                data_futura = now_brt + timedelta(minutes=delay_minutes)
+            else:
+                data_futura = now_brt
+
+            if data_futura.hour < start_hour or data_futura.hour >= end_hour or data_futura.weekday() >= 5:
+                data_futura = data_futura.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+                if data_futura <= now_brt:
+                    data_futura += timedelta(days=1)
+                while data_futura.weekday() >= 5:
+                    data_futura += timedelta(days=1)
+                quando_ligar_iso = data_futura.isoformat()
+            elif delay_minutes > 0:
                 quando_ligar_iso = data_futura.isoformat()
 
             pre_call_payload = {
